@@ -6,6 +6,8 @@
 #include <inttypes.h>
 #include <assert.h>
 
+int size_of_metadata = sizeof(struct m61_metadata); // 8 bytes of metadata
+int allignment_delta=7; // the delta that might have to be shifted to make the address divisible by 8
 
 int first_malloc_call=1;
 unsigned long long malloc_count = 0;          // # my malloc count
@@ -29,52 +31,55 @@ char* heap_max=0;                       // largest allocated addr
 void* m61_malloc(size_t sz, const char* file, int line) {
     (void) file, (void) line;   // avoid uninitialized variable warnings
     // Your code here.
-    int size_of_metadata = 8;
-    int size_to_allocate= sz+size_of_metadata+7;
-    void* ptr =base_malloc(size_to_allocate); // might have to move to make multiple of 8
-
-    //printf("ptr initial allocation: %i\n",ptr);
-    //printf("size_to_allocate: %i\n",size_to_allocate);
-    // Max Min.
-    if (first_malloc_call){
-          heap_min=(char*)ptr;
-          first_malloc_call=0;}
-    else{
-       if ((char*)ptr<heap_min) {heap_min=(char*)ptr;}}
-    
-    if (((char*)ptr+size_to_allocate)>=heap_max){
-        heap_max=(char*)ptr+size_to_allocate-1; // there is a -1 because the pointer itself makes up one byte
-        //printf("heapmax: %i\n",heap_max);
-        }
-
-
-
-    size_t ptr_distance=(uintptr_t) ptr % 8; // to figure out its distance from a multiple of 8
-    
-    if(ptr_distance !=0 ){
-    ptr=ptr+(8-ptr_distance);} // add the remaining distance to make it a multiple of 8
-    
-    
-    
     
    // Check for fail
     if (sz<4294967145){}
 
     else {
         nfail++;
-        fail_size=fail_size+sz;
-        //printf("Caught");
+        fail_size=fail_size+sz; //printf("Caught");
         return NULL;} 
-    
-    
-    // Create metadata struct and populate it.
+        
+    // Create metadata struct and start populating it.
     struct m61_metadata metadata;
-    metadata.allocation_size=sz;
+    metadata.allocation_size=sz;  // this metadata will be stored with the block later 
+    metadata.distance_to_8multiple=0; // initialising it.
+    
+    // This will be the actual size of the allocation to make space for shifting(8multiple) and metadata.       
+    int size_to_allocate= sz+size_of_metadata+allignment_delta; //printf("size_to_allocate: %i metadata size : %i\n",size_to_allocate,size_of_metadata);
+    void* ptr =base_malloc(size_to_allocate); // might have to move to make multiple of 8
+
+    //printf("base_malloc ptr: %i\n",(int)ptr);
+    
+    
+    // Heap Min
+    if (first_malloc_call){
+          heap_min=(char*)ptr;
+          first_malloc_call=0;}
+    else{
+       if ((char*)ptr<heap_min) {heap_min=(char*)ptr;}}
+    
+    // Heap Max
+    if (((char*)ptr+size_to_allocate)>=heap_max){
+        heap_max=(char*)ptr+size_to_allocate-1; // there is a -1 because the pointer itself makes up one byte
+        //printf("heapmax: %i\n",heap_max);
+        }
+
+
+    size_t distance_to_8multiple=0;
+    distance_to_8multiple =8-((uintptr_t) ptr % 8); // to figure out its distance from a multiple of 8
+    
+    if(distance_to_8multiple!=8 ){
+    ptr=ptr+distance_to_8multiple;
+    printf("distance_to_8m: %i\n",distance_to_8multiple);
+    metadata.distance_to_8multiple=distance_to_8multiple;
+    } // add the remaining distance to make it a multiple of 8
+    
+    
     
     *(struct m61_metadata*) ptr = metadata;
     
-        
-    ptr=ptr+8; // to keep it a multiple of 8 so 4 byts of data and 4 byts of blank space precedes actual ptr.
+    ptr=ptr+size_of_metadata; // Move forward by the size of metadata and return that.
     
     
     //printf("ptr returned: %i\n",ptr);
@@ -105,14 +110,20 @@ void m61_free(void *ptr, const char *file, int line) {
         printf("MEMORY BUG???: invalid free of pointer ???, not in heap\n");
         abort();}
     // Your code here.
-    
-    ptr=ptr-8; // meta data begins 8 bytes before ptr.
+    // Look back at the line below. might need to subtract the delta if a delta was added to make it a multiple of 8.
+    ptr=ptr-size_of_metadata; // shift ptr back to the top of metadata starting point.
+    //printf("size_of_metadata : %i\n",size_of_metadata);
     //printf("m61_free Reporting: address:%x content: %x\n",ptr,*((size_t*)ptr)); 
-    size_t freed_size =*((size_t*)ptr);
- 
-    active_size=active_size - freed_size;
+    struct m61_metadata *metadata_ptr;
+    metadata_ptr=ptr; // now metadata_ptr is pointing to the metadata for this allocation.
+   
+    ptr=ptr-(*metadata_ptr).distance_to_8multiple; // in case it was shifted to make it a multiple of 8.
+    //printf("distance to 8 : %i\n",(*metadata_ptr).distance_to_8multiple);
+    
+    active_size=active_size - (*metadata_ptr).allocation_size;
     free_count++;
     base_free(ptr);
+    //printf("Freed : %i\n",(int)ptr);
 }
 
 
@@ -132,10 +143,13 @@ void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
         // Copy the data from `ptr` into `new_ptr`.
         // To do that, we must figure out the size of allocation `ptr`.
         // Your code here (to fix test014).
-        ptr=ptr-8; // meta data begins 8 bytes before ptr.
+        ptr=ptr-size_of_metadata; // meta data begins 8 bytes before ptr.
         //printf("m61_free Reporting: address:%x content: %x\n",ptr,*((size_t*)ptr)); 
-        size_t old_size =*((size_t*)ptr);
-        ptr=ptr+8; // point back to the actual data.
+        struct m61_metadata *metadata_ptr;
+        metadata_ptr=ptr; // now metadata_ptr is pointing to the metadata for this allocation.
+
+        size_t old_size =(*metadata_ptr).allocation_size;
+        ptr=ptr+size_of_metadata; // point back to the actual data.
         
         if(old_size<sz)
           memcpy(new_ptr,ptr,old_size);

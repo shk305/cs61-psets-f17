@@ -40,7 +40,12 @@ struct m61_statistics {
 /// shk metadata struct
 struct m61_metadata {
     size_t allocation_size;         // # active allocations
+    size_t distance_to_8multiple;   // shifted by this to make it a multiple of 8
+    size_t test;
+    size_t test1;
 };
+
+
 
 /// m61_getstatistics(stats)
 ///    Store the current memory statistics in `*stats`.
