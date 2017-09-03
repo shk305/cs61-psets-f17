@@ -7,6 +7,7 @@
 #include <assert.h>
 
 
+int first_malloc_call=1;
 unsigned long long malloc_count = 0;          // # my malloc count
 unsigned long long free_count = 0;          // # my free count
 
@@ -16,8 +17,8 @@ unsigned long long ntotal = 0;           // # total allocations
 unsigned long long total_size = 0;       // # bytes in total allocations
 unsigned long long nfail = 0;            // # failed allocation attempts
 unsigned long long fail_size = 0;        // # bytes in failed alloc attempts
-//char* heap_min;                       // smallest allocated addr
-//char* heap_max;                       // largest allocated addr
+char* heap_min=0;                       // smallest allocated addr
+char* heap_max=0;                       // largest allocated addr
 
 /// m61_malloc(sz, file, line)
 ///    Return a pointer to `sz` bytes of newly-allocated dynamic memory.
@@ -28,8 +29,33 @@ unsigned long long fail_size = 0;        // # bytes in failed alloc attempts
 void* m61_malloc(size_t sz, const char* file, int line) {
     (void) file, (void) line;   // avoid uninitialized variable warnings
     // Your code here.
-    int size_of_metadata = sizeof(struct m61_metadata);
-    void* ptr =base_malloc(sz);
+    int size_of_metadata = 8;
+    int size_to_allocate= sz+size_of_metadata+7;
+    void* ptr =base_malloc(size_to_allocate); // might have to move to make multiple of 8
+
+    //printf("ptr initial allocation: %i\n",ptr);
+    //printf("size_to_allocate: %i\n",size_to_allocate);
+    // Max Min.
+    if (first_malloc_call){
+          heap_min=(char*)ptr;
+          first_malloc_call=0;}
+    else{
+       if ((char*)ptr<heap_min) {heap_min=(char*)ptr;}}
+    
+    if (((char*)ptr+size_to_allocate)>=heap_max){
+        heap_max=(char*)ptr+size_to_allocate-1; // there is a -1 because the pointer itself makes up one byte
+        //printf("heapmax: %i\n",heap_max);
+        }
+
+
+
+    size_t ptr_distance=(uintptr_t) ptr % 8; // to figure out its distance from a multiple of 8
+    
+    if(ptr_distance !=0 ){
+    ptr=ptr+(8-ptr_distance);} // add the remaining distance to make it a multiple of 8
+    
+    
+    
     
    // Check for fail
     if (sz<4294967145){}
@@ -37,19 +63,20 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     else {
         nfail++;
         fail_size=fail_size+sz;
-        return ptr;} 
+        return NULL;} 
     
     
     // Create metadata struct and populate it.
     struct m61_metadata metadata;
     metadata.allocation_size=sz;
-    //printf("allocation size:%x\n",metadata.allocation_size);
+    
     *(struct m61_metadata*) ptr = metadata;
-    //printf("BEFORE address:%x content: %x\n",ptr,*((size_t*)ptr));    
-    ptr=ptr+size_of_metadata;
-    //printf("AFTER address:%x content:%x\n",ptr,*((size_t*)ptr));
+    
+        
+    ptr=ptr+8; // to keep it a multiple of 8 so 4 byts of data and 4 byts of blank space precedes actual ptr.
     
     
+    //printf("ptr returned: %i\n",ptr);
 
     malloc_count++;
     total_size= total_size + sz;
@@ -67,9 +94,9 @@ void* m61_malloc(size_t sz, const char* file, int line) {
 
 void m61_free(void *ptr, const char *file, int line) {
     (void) file, (void) line;   // avoid uninitialized variable warnings
+    if (ptr==NULL){return;}
     // Your code here.
-    int size_of_metadata = sizeof(struct m61_metadata);
-    ptr=ptr-size_of_metadata;
+    ptr=ptr-8; // meta data begins 8 bytes before ptr.
     //printf("m61_free Reporting: address:%x content: %x\n",ptr,*((size_t*)ptr)); 
     size_t freed_size =*((size_t*)ptr);
  
@@ -131,6 +158,8 @@ void m61_getstatistics(struct m61_statistics* stats) {
     stats->active_size=active_size;
     stats->total_size=total_size;
     stats->fail_size=fail_size;
+    stats->heap_min=heap_min;
+    stats->heap_max=heap_max;
 }
 
 
