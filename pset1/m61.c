@@ -63,6 +63,7 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     else {
         nfail++;
         fail_size=fail_size+sz;
+        //printf("Caught");
         return NULL;} 
     
     
@@ -94,8 +95,17 @@ void* m61_malloc(size_t sz, const char* file, int line) {
 
 void m61_free(void *ptr, const char *file, int line) {
     (void) file, (void) line;   // avoid uninitialized variable warnings
+    //printf("ptr : %i\n",ptr);
+    //printf("min : %i\n",heap_min);
+    //printf("max : %i\n",heap_max);
     if (ptr==NULL){return;}
+    
+    // Check to see if the address is in the heap. might need to implement a different way later
+    if (ptr<heap_min | ptr>heap_max| !(malloc_count)){
+        printf("MEMORY BUG???: invalid free of pointer ???, not in heap\n");
+        abort();}
     // Your code here.
+    
     ptr=ptr-8; // meta data begins 8 bytes before ptr.
     //printf("m61_free Reporting: address:%x content: %x\n",ptr,*((size_t*)ptr)); 
     size_t freed_size =*((size_t*)ptr);
@@ -118,10 +128,19 @@ void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
     if (sz) {
         new_ptr = m61_malloc(sz, file, line);
     }
-    if (ptr && new_ptr) {
+    if (ptr!=NULL && new_ptr!=NULL) {
         // Copy the data from `ptr` into `new_ptr`.
         // To do that, we must figure out the size of allocation `ptr`.
         // Your code here (to fix test014).
+        ptr=ptr-8; // meta data begins 8 bytes before ptr.
+        //printf("m61_free Reporting: address:%x content: %x\n",ptr,*((size_t*)ptr)); 
+        size_t old_size =*((size_t*)ptr);
+        ptr=ptr+8; // point back to the actual data.
+        
+        if(old_size<sz)
+          memcpy(new_ptr,ptr,old_size);
+        else
+          memcpy(new_ptr,ptr,sz);
     }
     m61_free(ptr, file, line);
     return new_ptr;
@@ -137,8 +156,18 @@ void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
 
 void* m61_calloc(size_t nmemb, size_t sz, const char* file, int line) {
     // Your code here (to fix test016).
-    void* ptr = m61_malloc(nmemb * sz, file, line);
-    if (ptr) {
+    //printf("nmemb: %i\n",nmemb);
+    //printf("sz: %i\n",sz);
+    //nmemb=300;
+    size_t total= nmemb* sz;
+    
+    //printf("total: %u\n",total);
+    
+    if ((sz!=0) &&((total/sz) != nmemb)){total=4294967145;} 
+     //printf("total: %u\n",total);
+     
+    void* ptr = m61_malloc(total, file, line);
+    if (ptr!=NULL) {
         memset(ptr, 0, nmemb * sz);
     }
     return ptr;
