@@ -6,6 +6,10 @@
 #include <inttypes.h>
 #include <assert.h>
 
+
+struct node* list_head=0;
+struct node* list_tail;
+
 int size_of_metadata = sizeof(struct m61_metadata); // 8 bytes of metadata
 int allignment_delta=7; // the delta that might have to be shifted to make the address divisible by 8
 
@@ -49,8 +53,9 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     int size_to_allocate= sz+size_of_metadata+allignment_delta; //printf("size_to_allocate: %i metadata size : %i\n",size_to_allocate,size_of_metadata);
     void* ptr =base_malloc(size_to_allocate); // might have to move to make multiple of 8
 
-    //printf("base_malloc ptr: %i\n",(int)ptr);
-    
+    printf("\n\nbase_malloc ptr: %i ",(int)ptr);
+    list_head=list_prepend(list_head,ptr); // add data and update the list head to the new list head
+    list_traverse_recursive(list_head);
     
     // Heap Min
     if (first_malloc_call){
@@ -123,6 +128,7 @@ void m61_free(void *ptr, const char *file, int line) {
     active_size=active_size - (*metadata_ptr).allocation_size;
     free_count++;
     base_free(ptr);
+    
     //printf("Freed : %i\n",(int)ptr);
 }
 
@@ -227,3 +233,45 @@ void m61_printstatistics(void) {
 void m61_printleakreport(void) {
     // Your code here.
 }
+
+
+
+// LINKED list implementation stuff.
+// Basic linked list implementation taken from
+// www.zentut.com/c-tutorial/c-linked-list
+
+
+struct node* create(struct node* old_list_head, void* ptr){
+    struct node* new_node =(struct node*)base_malloc(sizeof(struct node));
+    if (new_node==NULL){
+        printf("The new node could not be created\n");
+        abort();
+     }
+ 
+     (*new_node).ptr=ptr;
+     (*new_node).next=old_list_head;
+     if(old_list_head !=0){
+         (*old_list_head).previous=new_node;
+         }
+ 
+
+     return new_node;
+    }
+    
+struct node* list_prepend(struct node* old_list_head,void* ptr){ // ptr is the data.
+  
+    struct node* new_node=create(old_list_head,ptr);
+    //list_head=new_node; // list_head is the global variable.
+    return new_node;
+}
+
+void list_traverse_recursive(struct node* list_head){
+    printf("\nMy Pointer: %i",list_head);
+    printf("\ntravarse:prvious: %i",(*list_head).previous);
+    printf("\ntravarse:next: %i",(*list_head).next);
+    printf("\ntravarse:ptr: %i\n\n",(*list_head).ptr);
+    if((*list_head).next!=0){
+        list_traverse_recursive((*list_head).next);
+        }
+    return;
+    }

@@ -45,7 +45,16 @@ struct m61_metadata {
     size_t test1;
 };
 
+//// LINKED LIST IMPLEMENTATION STUFF
 
+/// Each node of the linked list.
+struct node{
+        void* ptr;
+        const char* file;
+        int line;
+        struct node* previous;
+        struct node* next; 
+    };
 
 /// m61_getstatistics(stats)
 ///    Store the current memory statistics in `*stats`.
@@ -74,5 +83,11 @@ void m61_printleakreport(void);
 void* base_malloc(size_t sz);
 void base_free(void* ptr);
 void base_malloc_disable(int is_disabled);
+
+
+// LIST function prototipes.
+struct node* list_prepend(struct node* list_head,void* ptr);
+void list_traverse_recursive(struct node* list_head);
+struct node* create(struct node* next, void* ptr);
 
 #endif
