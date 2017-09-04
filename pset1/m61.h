@@ -41,8 +41,8 @@ struct m61_statistics {
 struct m61_metadata {
     size_t allocation_size;         // # active allocations
     size_t distance_to_8multiple;   // shifted by this to make it a multiple of 8
-    size_t test;
-    size_t test1;
+    struct node* entry;                   // Pointer to list entry
+    size_t data_valid;              // if deadbeaf. data not valid
 };
 
 //// LINKED LIST IMPLEMENTATION STUFF
@@ -87,7 +87,8 @@ void base_malloc_disable(int is_disabled);
 
 // LIST function prototipes.
 struct node* list_prepend(struct node* list_head,void* ptr);
-void list_traverse_recursive(struct node* list_head);
+int list_traverse_recursive(struct node* list_head, void* ptr);
 struct node* create(struct node* next, void* ptr);
+void remove_from_list(struct node* entry_to_remove);
 
 #endif

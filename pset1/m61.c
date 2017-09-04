@@ -53,9 +53,9 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     int size_to_allocate= sz+size_of_metadata+allignment_delta; //printf("size_to_allocate: %i metadata size : %i\n",size_to_allocate,size_of_metadata);
     void* ptr =base_malloc(size_to_allocate); // might have to move to make multiple of 8
 
-    printf("\n\nbase_malloc ptr: %i ",(int)ptr);
+    //printf("\n\nbase_malloc ptr: %i ",(int)ptr);
     list_head=list_prepend(list_head,ptr); // add data and update the list head to the new list head
-    list_traverse_recursive(list_head);
+    metadata.entry=list_head; // this is the pointer for the entry in the list for this malloc
     
     // Heap Min
     if (first_malloc_call){
@@ -76,7 +76,7 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     
     if(distance_to_8multiple!=8 ){
     ptr=ptr+distance_to_8multiple;
-    printf("distance_to_8m: %i\n",distance_to_8multiple);
+    //printf("distance_to_8m: %i\n",distance_to_8multiple);
     metadata.distance_to_8multiple=distance_to_8multiple;
     } // add the remaining distance to make it a multiple of 8
     
@@ -121,13 +121,23 @@ void m61_free(void *ptr, const char *file, int line) {
     //printf("m61_free Reporting: address:%x content: %x\n",ptr,*((size_t*)ptr)); 
     struct m61_metadata *metadata_ptr;
     metadata_ptr=ptr; // now metadata_ptr is pointing to the metadata for this allocation.
-   
+ 
+    
+	remove_from_list((*metadata_ptr).entry); // remove the list entry for this pointer
+    //(*metadata_ptr).data_valid=1;   // this means this data is no longer valid
+
     ptr=ptr-(*metadata_ptr).distance_to_8multiple; // in case it was shifted to make it a multiple of 8.
     //printf("distance to 8 : %i\n",(*metadata_ptr).distance_to_8multiple);
     
     active_size=active_size - (*metadata_ptr).allocation_size;
     free_count++;
-    base_free(ptr);
+    
+	
+	base_free(ptr);
+	
+	
+	
+	//list_traverse_recursive(list_head);
     
     //printf("Freed : %i\n",(int)ptr);
 }
@@ -265,13 +275,48 @@ struct node* list_prepend(struct node* old_list_head,void* ptr){ // ptr is the d
     return new_node;
 }
 
-void list_traverse_recursive(struct node* list_head){
-    printf("\nMy Pointer: %i",list_head);
-    printf("\ntravarse:prvious: %i",(*list_head).previous);
-    printf("\ntravarse:next: %i",(*list_head).next);
-    printf("\ntravarse:ptr: %i\n\n",(*list_head).ptr);
+int list_traverse_recursive(struct node* list_head,void* ptr){
+    //printf("\nMy Pointer: %i",list_head);
+    //printf("\ntravarse:prvious: %i",(*list_head).previous);
+    //printf("\ntravarse:next: %i",(*list_head).next);
+    //printf("\ntravarse:ptr: %i\n\n",(*list_head).ptr);
+	
+	if ((*list_head).ptr==ptr){return 1;}
+	
     if((*list_head).next!=0){
-        list_traverse_recursive((*list_head).next);
+        return list_traverse_recursive((*list_head).next,ptr);
         }
+    return 0;
+    }
+	
+
+void remove_from_list(struct node* entry_to_remove){
+    //(*(*entry_to_remove).next).previous=
+	//(*(*entry_to_remove).previous).next=(*entry_to_remove).next;
+	//list_traverse_recursive(list_head);
+    //printf("POINTER_TO_ENTRY TO BE REMOVED : %i\n",entry_to_remove);
+	//printf("My Next: %i\n",(*entry_to_remove).next);
+	//printf("My Previous: %i\n",(*entry_to_remove).previous);
+	struct node* my_next=(*entry_to_remove).next;
+	struct node* my_previous=(*entry_to_remove).previous;
+
+	if (my_next!=0){
+		 //printf("Next er previous: %i\n",(*my_next).previous);
+		 (*my_next).previous=my_previous;
+		}
+		
+    if (my_previous!=0){
+		 //printf("Previous er next: %i\n",(*my_previous).next);
+		 (*my_previous).next=my_next;
+		}
+	 else { list_head = my_next; // I am the least so my next one will become the list head
+		 
+		 }	
+		
+	//printf("Previous er next: %i\n",*((*entry_to_remove).previous).next);
+	
+	//list_traverse_recursive(list_head);
+	base_free(entry_to_remove);
+    
     return;
     }
