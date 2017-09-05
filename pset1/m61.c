@@ -11,7 +11,7 @@ struct node* list_head=0;
 struct node* list_tail;
 
 int size_of_metadata = sizeof(struct m61_metadata); // 8 bytes of metadata
-int allignment_delta=7; // the delta that might have to be shifted to make the address divisible by 8
+int malloc_end_buffer=4*sizeof(int);      // 20 bytes to be added at the end for boundry write issues.
 
 int first_malloc_call=1;
 unsigned long long malloc_count = 0;          // # my malloc count
@@ -36,27 +36,60 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     (void) file, (void) line;   // avoid uninitialized variable warnings
     // Your code here.
     
-   // Check for fail
+   // First check for failing contition
     if (sz<4294967145){}
-
     else {
         nfail++;
         fail_size=fail_size+sz; //printf("Caught");
-        return NULL;} 
+        return NULL;
+	} 
         
-    // Create metadata struct and start populating it.
+    // Create the metadata struct for this allocation and start populating it.
     struct m61_metadata metadata;
     metadata.allocation_size=sz;  // this metadata will be stored with the block later 
     metadata.distance_to_8multiple=0; // initialising it.
-    
+
     // This will be the actual size of the allocation to make space for shifting(8multiple) and metadata.       
-    int size_to_allocate= sz+size_of_metadata+allignment_delta; //printf("size_to_allocate: %i metadata size : %i\n",size_to_allocate,size_of_metadata);
+    int size_to_allocate= sz+size_of_metadata+malloc_end_buffer; //printf("size_to_allocate: %i metadata size : %i\n",size_to_allocate,size_of_metadata);
     void* ptr =base_malloc(size_to_allocate); // might have to move to make multiple of 8
 
-    //printf("\n\nbase_malloc ptr: %i ",(int)ptr);
+    /*
+    printf("\n\nACTUAL BASE MALLOC RETURN: %i ",(int)ptr);
+	printf("\nUSER REQUESTED SZ: %i ",sz);
+	printf("\nSIZE OF METADATA: %i ",size_of_metadata);
+	printf("\nMALLOC_END_BUFFER SIZE: %i ",malloc_end_buffer);
+	printf("\n\nTOTAL SIZE TO_ALLOCATE: %i ",size_to_allocate);
+    */
+	
+    // Add this ptr to the list that tracks all allocation.
     list_head=list_prepend(list_head,ptr); // add data and update the list head to the new list head
     metadata.entry=list_head; // this is the pointer for the entry in the list for this malloc
+
+
+    // Make sure the address is alligned
+    size_t distance_to_8multiple =8-((uintptr_t) ptr % 8); // to figure out its distance from a multiple of 8
     
+    if(distance_to_8multiple!=8 ){ // meaning if it is not a multiple of 8 already
+    ptr=ptr+distance_to_8multiple; // shift ptr forward to make it a multiple of 8
+    printf("distance_to_8m: %i\n",distance_to_8multiple);
+    metadata.distance_to_8multiple=distance_to_8multiple;
+    } // add the remaining distance to make it a multiple of 8
+
+    // Make the data valid by writing 0xbeefbeef. Free will write 0xdeaddead
+	metadata.data_valid=0xbeefbeef;//printf("DATA VALID returned: %x\n",metadata.data_valid);
+		
+    // Storing the metadata at the location pointed to by ptr. 
+    *(struct m61_metadata*) ptr = metadata;
+
+
+    // Initialize the end part witha a known value
+	size_t* end_boundry_ptr=ptr+size_of_metadata+sz;
+	//printf("\nEnd_boundry_ptr : %i ",end_boundry_ptr);
+	for(int i=0; i < 4;i++){
+		 //printf(" int : %i",i);
+		 *(end_boundry_ptr+i) = 0xdeaddead;
+		}
+	
     // Heap Min
     if (first_malloc_call){
           heap_min=(char*)ptr;
@@ -64,35 +97,30 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     else{
        if ((char*)ptr<heap_min) {heap_min=(char*)ptr;}}
     
-    // Heap Max
+    // Heap Max .. ?? should I add size_to_allocate or just size. this means heapmein and heapmax is not hiding the metadata portion. think.
     if (((char*)ptr+size_to_allocate)>=heap_max){
         heap_max=(char*)ptr+size_to_allocate-1; // there is a -1 because the pointer itself makes up one byte
         //printf("heapmax: %i\n",heap_max);
         }
 
 
-    size_t distance_to_8multiple=0;
-    distance_to_8multiple =8-((uintptr_t) ptr % 8); // to figure out its distance from a multiple of 8
-    
-    if(distance_to_8multiple!=8 ){
-    ptr=ptr+distance_to_8multiple;
-    //printf("distance_to_8m: %i\n",distance_to_8multiple);
-    metadata.distance_to_8multiple=distance_to_8multiple;
-    } // add the remaining distance to make it a multiple of 8
-    
-    
-    
-    *(struct m61_metadata*) ptr = metadata;
-    
+	//Moving the pointer ahead of the metadata to point to the beginning of data
     ptr=ptr+size_of_metadata; // Move forward by the size of metadata and return that.
-    
-    
-    //printf("ptr returned: %i\n",ptr);
+    //printf("\nptr returned: %i",ptr);
 
     malloc_count++;
     total_size= total_size + sz;
     active_size=active_size+sz;
-      
+	
+	/*/ DUMP ALLOCATION
+	size_t* beginning_of_allocation_ptr=ptr-size_of_metadata;
+    printf("\nRecalculated beginning : %i \n",beginning_of_allocation_ptr);
+	for(int i=0; i<(size_to_allocate/4); i++)
+	{
+	 printf(" \nMEMORY LOCATION: %i CONTENT: %x ", beginning_of_allocation_ptr+(i),*(beginning_of_allocation_ptr+(i) ));	
+	}
+      */
+	  
     return ptr;
 }
 
@@ -122,23 +150,44 @@ void m61_free(void *ptr, const char *file, int line) {
     struct m61_metadata *metadata_ptr;
     metadata_ptr=ptr; // now metadata_ptr is pointing to the metadata for this allocation.
  
-    
-	remove_from_list((*metadata_ptr).entry); // remove the list entry for this pointer
-    //(*metadata_ptr).data_valid=1;   // this means this data is no longer valid
+	// Make sure there were no overwrites at the end boundry
+    size_t* end_boundry_ptr=ptr+size_of_metadata+(*metadata_ptr).allocation_size; 
+    //printf("\nEnd_boundry_ptr FREE: %i ",end_boundry_ptr);
+    int end_boundry_overwrite=0;
+	for(int i=0; i < 4;i++){
+		 if(*(end_boundry_ptr+i) != 0xdeaddead){
+			 end_boundry_overwrite=1;
+		 }
+	}
 
-    ptr=ptr-(*metadata_ptr).distance_to_8multiple; // in case it was shifted to make it a multiple of 8.
+
+	// If there were any allignment shift. undo the shift. ptr should now point to the original base_malloc returned pointer
+	ptr=ptr-(*metadata_ptr).distance_to_8multiple; // in case it was shifted to make it a multiple of 8.
     //printf("distance to 8 : %i\n",(*metadata_ptr).distance_to_8multiple);
+	//printf("FREE: REPORTING DATA_VALIDITY : %x\n",(*metadata_ptr).data_valid);
     
-    active_size=active_size - (*metadata_ptr).allocation_size;
-    free_count++;
-    
-	
-	base_free(ptr);
-	
-	
-	
+    				
+    // First check if this is a valid free call.
+    if ((*metadata_ptr).data_valid==0xbeefbeef){
+	   
+	   if(end_boundry_overwrite){
+		   printf("MEMORY BUG???: detected wild write during free of pointer ???\n");
+		   return;}
+         	
+	   // Remove the list entry for this allocation
+	   remove_from_list((*metadata_ptr).entry); 
+       active_size=active_size - (*metadata_ptr).allocation_size;
+       free_count++;
+       (*metadata_ptr).data_valid=0xdeaddead; // Make the data valid bit invalid.
+	   base_free(ptr);
+	}
+	else{
+		if ((*metadata_ptr).data_valid==0xdeaddead){
+		 printf("MEMORY BUG: invalid free of pointer \n");}
+		else{
+		 printf("MEMORY BUG: %s:%i: invalid free of pointer ???, not allocated\n",file, line);}
+	}
 	//list_traverse_recursive(list_head);
-    
     //printf("Freed : %i\n",(int)ptr);
 }
 
@@ -152,10 +201,11 @@ void m61_free(void *ptr, const char *file, int line) {
 
 void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
     void* new_ptr = NULL;
-    if (sz) {
+    if (sz!=0) {
         new_ptr = m61_malloc(sz, file, line);
     }
     if (ptr!=NULL && new_ptr!=NULL) {
+		//printf("got here");
         // Copy the data from `ptr` into `new_ptr`.
         // To do that, we must figure out the size of allocation `ptr`.
         // Your code here (to fix test014).
@@ -163,7 +213,17 @@ void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
         //printf("m61_free Reporting: address:%x content: %x\n",ptr,*((size_t*)ptr)); 
         struct m61_metadata *metadata_ptr;
         metadata_ptr=ptr; // now metadata_ptr is pointing to the metadata for this allocation.
-
+        
+		
+		//Check if this was a valid pointer passed to realloc
+		if((*metadata_ptr).data_valid!=0xbeefbeef)
+		{
+		  printf("MEMORY BUG???: invalid realloc of pointer ???");
+		  return;
+		}
+		//printf("MEMORY BUG???: invalid realloc of pointer ???");
+		
+		
         size_t old_size =(*metadata_ptr).allocation_size;
         ptr=ptr+size_of_metadata; // point back to the actual data.
         
@@ -257,16 +317,20 @@ struct node* create(struct node* old_list_head, void* ptr){
         printf("The new node could not be created\n");
         abort();
      }
- 
+     // save the payload (data) in this new node
      (*new_node).ptr=ptr;
+	 
+	 // Old list head will be the next element after this is added.
      (*new_node).next=old_list_head;
+	 // Since I added on top the new node.previous =0
+	 (*new_node).previous=0;
+	 
      if(old_list_head !=0){
-         (*old_list_head).previous=new_node;
-         }
- 
+         (*old_list_head).previous=new_node;}
 
      return new_node;
     }
+
     
 struct node* list_prepend(struct node* old_list_head,void* ptr){ // ptr is the data.
   
@@ -275,18 +339,22 @@ struct node* list_prepend(struct node* old_list_head,void* ptr){ // ptr is the d
     return new_node;
 }
 
-int list_traverse_recursive(struct node* list_head,void* ptr){
-    //printf("\nMy Pointer: %i",list_head);
-    //printf("\ntravarse:prvious: %i",(*list_head).previous);
-    //printf("\ntravarse:next: %i",(*list_head).next);
-    //printf("\ntravarse:ptr: %i\n\n",(*list_head).ptr);
-	
-	if ((*list_head).ptr==ptr){return 1;}
+void list_traverse_recursive(struct node* list_head){
+	if(list_head==0){
+		printf(" \nThe list is empty\n");
+		return;		
+	}
+    printf("\n List Entry Address: %i",list_head);
+	printf("\n PTR: %i",(*list_head).ptr);
+    printf("\n previous--> %i",(*list_head).previous);
+    printf("\n next--> %i \n",(*list_head).next);
+    
+		
 	
     if((*list_head).next!=0){
-        return list_traverse_recursive((*list_head).next,ptr);
+        list_traverse_recursive((*list_head).next);
         }
-    return 0;
+    return;
     }
 	
 
@@ -300,17 +368,16 @@ void remove_from_list(struct node* entry_to_remove){
 	struct node* my_next=(*entry_to_remove).next;
 	struct node* my_previous=(*entry_to_remove).previous;
 
-	if (my_next!=0){
+	if (my_next!=0){ // if its not the last element.
 		 //printf("Next er previous: %i\n",(*my_next).previous);
 		 (*my_next).previous=my_previous;
 		}
 		
-    if (my_previous!=0){
+    if (my_previous!=0){ // if its not the first element.
 		 //printf("Previous er next: %i\n",(*my_previous).next);
 		 (*my_previous).next=my_next;
 		}
-	 else { list_head = my_next; // I am the least so my next one will become the list head
-		 
+	 else { list_head = 0; // The list will become empty after this removal.
 		 }	
 		
 	//printf("Previous er next: %i\n",*((*entry_to_remove).previous).next);
