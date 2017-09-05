@@ -41,7 +41,7 @@ struct m61_statistics {
 struct m61_metadata {
     size_t allocation_size;         // # active allocations
     size_t distance_to_8multiple;   // shifted by this to make it a multiple of 8
-    struct node* entry;             // Pointer to list entry
+    struct m61_node* entry;             // Pointer to list entry
     size_t data_valid;              // if deadbeaf. data not valid
 	//const char* file;               // file name
 	//int line;                       // Line Number
@@ -50,12 +50,12 @@ struct m61_metadata {
 //// LINKED LIST IMPLEMENTATION STUFF
 
 /// Each node of the linked list.
-struct node{
+typedef struct m61_node{
         void* ptr;
         const char* file;
         int line;
-        struct node* previous;
-        struct node* next; 
+        struct m61_node* previous;
+        struct m61_node* next; 
     };
 
 /// m61_getstatistics(stats)
@@ -88,9 +88,9 @@ void base_malloc_disable(int is_disabled);
 
 
 // LIST function prototipes.
-struct node* list_prepend(struct node* list_head,void* ptr);
-void list_traverse_recursive(struct node* list_head);
-struct node* create(struct node* next, void* ptr);
-void remove_from_list(struct node* entry_to_remove);
+struct m61_node* list_prepend(struct m61_node* list_head,void* ptr);
+void list_traverse_recursive(struct m61_node* list_head);
+struct m61_node* create(struct m61_node* next, void* ptr);
+void remove_from_list(struct m61_node* entry_to_remove);
 
 #endif

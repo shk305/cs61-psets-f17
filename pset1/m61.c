@@ -7,8 +7,8 @@
 #include <assert.h>
 
 
-struct node* list_head=0;
-struct node* list_tail;
+struct m61_node* list_head=0;
+struct m61_node* list_tail;
 
 int size_of_metadata = sizeof(struct m61_metadata); // 8 bytes of metadata
 int malloc_end_buffer=4*sizeof(int);      // 20 bytes to be added at the end for boundry write issues.
@@ -311,8 +311,8 @@ void m61_printleakreport(void) {
 // www.zentut.com/c-tutorial/c-linked-list
 
 
-struct node* create(struct node* old_list_head, void* ptr){
-    struct node* new_node =(struct node*)base_malloc(sizeof(struct node));
+struct m61_node* create(struct m61_node* old_list_head, void* ptr){
+    struct m61_node* new_node =(struct m61_node*)base_malloc(sizeof(struct m61_node));
     if (new_node==NULL){
         printf("The new node could not be created\n");
         abort();
@@ -332,14 +332,14 @@ struct node* create(struct node* old_list_head, void* ptr){
     }
 
     
-struct node* list_prepend(struct node* old_list_head,void* ptr){ // ptr is the data.
+struct m61_node* list_prepend(struct m61_node* old_list_head,void* ptr){ // ptr is the data.
   
-    struct node* new_node=create(old_list_head,ptr);
+    struct m61_node* new_node=create(old_list_head,ptr);
     //list_head=new_node; // list_head is the global variable.
     return new_node;
 }
 
-void list_traverse_recursive(struct node* list_head){
+void list_traverse_recursive(struct m61_node* list_head){
 	if(list_head==0){
 		printf(" \nThe list is empty\n");
 		return;		
@@ -358,15 +358,15 @@ void list_traverse_recursive(struct node* list_head){
     }
 	
 
-void remove_from_list(struct node* entry_to_remove){
+void remove_from_list(struct m61_node* entry_to_remove){
     //(*(*entry_to_remove).next).previous=
 	//(*(*entry_to_remove).previous).next=(*entry_to_remove).next;
 	//list_traverse_recursive(list_head);
     //printf("POINTER_TO_ENTRY TO BE REMOVED : %i\n",entry_to_remove);
 	//printf("My Next: %i\n",(*entry_to_remove).next);
 	//printf("My Previous: %i\n",(*entry_to_remove).previous);
-	struct node* my_next=(*entry_to_remove).next;
-	struct node* my_previous=(*entry_to_remove).previous;
+	struct m61_node* my_next=(*entry_to_remove).next;
+	struct m61_node* my_previous=(*entry_to_remove).previous;
 
 	if (my_next!=0){ // if its not the last element.
 		 //printf("Next er previous: %i\n",(*my_next).previous);
