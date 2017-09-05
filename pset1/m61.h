@@ -43,8 +43,8 @@ struct m61_metadata {
     size_t distance_to_8multiple;   // shifted by this to make it a multiple of 8
     struct m61_node* entry;             // Pointer to list entry
     size_t data_valid;              // if deadbeaf. data not valid
-	//const char* file;               // file name
-	//int line;                       // Line Number
+	const char* file;               // file name
+	int line;                       // Line Number
 };
 
 //// LINKED LIST IMPLEMENTATION STUFF
@@ -52,8 +52,7 @@ struct m61_metadata {
 /// Each node of the linked list.
 typedef struct m61_node{
         void* ptr;
-        const char* file;
-        int line;
+		size_t distance_to_8multiple;
         struct m61_node* previous;
         struct m61_node* next; 
     };
@@ -88,9 +87,11 @@ void base_malloc_disable(int is_disabled);
 
 
 // LIST function prototipes.
-struct m61_node* list_prepend(struct m61_node* list_head,void* ptr);
+struct m61_node* list_prepend(struct m61_node* list_head,void* ptr,size_t distance_to_8m);
 void list_traverse_recursive(struct m61_node* list_head);
-struct m61_node* create(struct m61_node* next, void* ptr);
+struct m61_node* create(struct m61_node* next, void* ptr,size_t distance_to_8m);
 void remove_from_list(struct m61_node* entry_to_remove);
+
+void print_recursive(struct m61_node* list_head);
 
 #endif

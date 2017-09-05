@@ -48,26 +48,29 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     struct m61_metadata metadata;
     metadata.allocation_size=sz;  // this metadata will be stored with the block later 
     metadata.distance_to_8multiple=0; // initialising it.
-
+    metadata.file=file;
+	metadata.line=line;
+	
     // This will be the actual size of the allocation to make space for shifting(8multiple) and metadata.       
     int size_to_allocate= sz+size_of_metadata+malloc_end_buffer; //printf("size_to_allocate: %i metadata size : %i\n",size_to_allocate,size_of_metadata);
     void* ptr =base_malloc(size_to_allocate); // might have to move to make multiple of 8
 
-    /*
-    printf("\n\nACTUAL BASE MALLOC RETURN: %i ",(int)ptr);
-	printf("\nUSER REQUESTED SZ: %i ",sz);
-	printf("\nSIZE OF METADATA: %i ",size_of_metadata);
-	printf("\nMALLOC_END_BUFFER SIZE: %i ",malloc_end_buffer);
-	printf("\n\nTOTAL SIZE TO_ALLOCATE: %i ",size_to_allocate);
-    */
-	
-    // Add this ptr to the list that tracks all allocation.
-    list_head=list_prepend(list_head,ptr); // add data and update the list head to the new list head
-    metadata.entry=list_head; // this is the pointer for the entry in the list for this malloc
-
-
-    // Make sure the address is alligned
+    //printf("\n\nFile:%s Line:%i ",metadata.file,metadata.line);
+    //printf("\nACTUAL BASE MALLOC RETURN: %i ",(int)ptr);
+	//printf("\nUSER REQUESTED SZ: %i ",sz);
+	//printf("\nSIZE OF METADATA: %i ",size_of_metadata);
+	//printf("\nMALLOC_END_BUFFER SIZE: %i ",malloc_end_buffer);
+	//printf("\n\nTOTAL SIZE TO_ALLOCATE: %i ",size_to_allocate);
+    
+	// Make sure the address is alligned
     size_t distance_to_8multiple =8-((uintptr_t) ptr % 8); // to figure out its distance from a multiple of 8
+  
+    // Add this ptr to the list that tracks all allocation.
+    list_head=list_prepend(list_head,ptr,distance_to_8multiple); // add data and update the list head to the new list head
+    metadata.entry=list_head; // this is the pointer for the entry in the list for this malloc
+	//list_traverse_recursive(list_head);
+
+ 
     
     if(distance_to_8multiple!=8 ){ // meaning if it is not a multiple of 8 already
     ptr=ptr+distance_to_8multiple; // shift ptr forward to make it a multiple of 8
@@ -111,15 +114,15 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     malloc_count++;
     total_size= total_size + sz;
     active_size=active_size+sz;
-	
-	/*/ DUMP ALLOCATION
+	/*
+	// DUMP ALLOCATION
 	size_t* beginning_of_allocation_ptr=ptr-size_of_metadata;
     printf("\nRecalculated beginning : %i \n",beginning_of_allocation_ptr);
 	for(int i=0; i<(size_to_allocate/4); i++)
 	{
 	 printf(" \nMEMORY LOCATION: %i CONTENT: %x ", beginning_of_allocation_ptr+(i),*(beginning_of_allocation_ptr+(i) ));	
 	}
-      */
+     */ 
 	  
     return ptr;
 }
@@ -132,6 +135,7 @@ void* m61_malloc(size_t sz, const char* file, int line) {
 ///    `file`:`line`.
 
 void m61_free(void *ptr, const char *file, int line) {
+	//list_traverse_recursive(list_head);
     (void) file, (void) line;   // avoid uninitialized variable warnings
     //printf("ptr : %i\n",ptr);
     //printf("min : %i\n",heap_min);
@@ -301,7 +305,13 @@ void m61_printstatistics(void) {
 ///    memory.
 
 void m61_printleakreport(void) {
-    // Your code here.
+  	if(list_head==0){
+		//printf("\nThe list is empty\n");
+		return;	
+	}	
+    print_recursive(list_head);
+	
+    return;
 }
 
 
@@ -311,7 +321,7 @@ void m61_printleakreport(void) {
 // www.zentut.com/c-tutorial/c-linked-list
 
 
-struct m61_node* create(struct m61_node* old_list_head, void* ptr){
+struct m61_node* create(struct m61_node* old_list_head, void* ptr,size_t distance_to_8m){
     struct m61_node* new_node =(struct m61_node*)base_malloc(sizeof(struct m61_node));
     if (new_node==NULL){
         printf("The new node could not be created\n");
@@ -319,7 +329,7 @@ struct m61_node* create(struct m61_node* old_list_head, void* ptr){
      }
      // save the payload (data) in this new node
      (*new_node).ptr=ptr;
-	 
+	 (*new_node).distance_to_8multiple=distance_to_8m;
 	 // Old list head will be the next element after this is added.
      (*new_node).next=old_list_head;
 	 // Since I added on top the new node.previous =0
@@ -332,9 +342,9 @@ struct m61_node* create(struct m61_node* old_list_head, void* ptr){
     }
 
     
-struct m61_node* list_prepend(struct m61_node* old_list_head,void* ptr){ // ptr is the data.
+struct m61_node* list_prepend(struct m61_node* old_list_head,void* ptr, size_t distance_to_8m){ // ptr is the data.
   
-    struct m61_node* new_node=create(old_list_head,ptr);
+    struct m61_node* new_node=create(old_list_head,ptr,distance_to_8m);
     //list_head=new_node; // list_head is the global variable.
     return new_node;
 }
@@ -346,10 +356,10 @@ void list_traverse_recursive(struct m61_node* list_head){
 	}
     printf("\n List Entry Address: %i",list_head);
 	printf("\n PTR: %i",(*list_head).ptr);
+	printf("\n distance_to_8multiple: %i",(*list_head).distance_to_8multiple);
     printf("\n previous--> %i",(*list_head).previous);
     printf("\n next--> %i \n",(*list_head).next);
     
-		
 	
     if((*list_head).next!=0){
         list_traverse_recursive((*list_head).next);
@@ -377,7 +387,10 @@ void remove_from_list(struct m61_node* entry_to_remove){
 		 //printf("Previous er next: %i\n",(*my_previous).next);
 		 (*my_previous).next=my_next;
 		}
-	 else { list_head = 0; // The list will become empty after this removal.
+	 else {
+           if(my_next==0)  // if My next is also 0. the list is empty after my removal
+              list_head = 0; // The list will become empty after this removal.
+           else list_head = my_next; // if my next is not 0 then my next becomes the new head.
 		 }	
 		
 	//printf("Previous er next: %i\n",*((*entry_to_remove).previous).next);
@@ -385,5 +398,38 @@ void remove_from_list(struct m61_node* entry_to_remove){
 	//list_traverse_recursive(list_head);
 	base_free(entry_to_remove);
     
+    return;
+    }
+	
+	
+
+void print_recursive(struct m61_node* list_head){
+	if(list_head==0){
+		//printf(" \nThe list is empty\n");
+		return;		
+	}
+	
+	void* ptr_retrieved= (*list_head).ptr;
+	struct m61_metadata* metadata_ptr=ptr_retrieved;
+	//printf("\n PTR retrieved: %i",ptr_retrieved);
+	if((*list_head).distance_to_8multiple!=8)
+	{
+		printf("in here/n");
+		ptr_retrieved=ptr_retrieved+(*list_head).distance_to_8multiple;
+	}
+	
+	ptr_retrieved=ptr_retrieved+size_of_metadata; // move to the end of metadata beginning of data
+	
+	printf("LEAK CHECK: %s:%i: allocated object %p with size %i",(*metadata_ptr).file,(*metadata_ptr).line,ptr_retrieved,(*metadata_ptr).allocation_size);
+    //printf("\n List Entry Address: %i",list_head);
+	//printf("\n PTR: %p",(*list_head).ptr);
+	//printf("\n distance_to_8multiple: %i",(*list_head).distance_to_8multiple);
+    //printf("\n previous--> %i",(*list_head).previous);
+    //printf("\n next--> %i \n",(*list_head).next);
+    
+	
+    if((*list_head).next!=0){
+        print_recursive((*list_head).next);
+        }
     return;
     }
