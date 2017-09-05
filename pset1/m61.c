@@ -62,7 +62,7 @@ void* m61_malloc(size_t sz, const char* file, int line) {
 	//printf("\nMALLOC_END_BUFFER SIZE: %i ",malloc_end_buffer);
 	//printf("\n\nTOTAL SIZE TO_ALLOCATE: %i ",size_to_allocate);
     
-	// Make sure the address is alligned
+	// Make sure the address is alligned, if not, keep the distance for later use.
     size_t distance_to_8multiple =8-((uintptr_t) ptr % 8); // to figure out its distance from a multiple of 8
   
     // Add this ptr to the list that tracks all allocation.
@@ -79,7 +79,7 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     } // add the remaining distance to make it a multiple of 8
 
     // Make the data valid by writing 0xbeefbeef. Free will write 0xdeaddead
-	metadata.data_valid=0xbeefbeef;//printf("DATA VALID returned: %x\n",metadata.data_valid);
+	metadata.data_valid=ptr;//printf("DATA VALID returned: %x\n",metadata.data_valid);
 		
     // Storing the metadata at the location pointed to by ptr. 
     *(struct m61_metadata*) ptr = metadata;
@@ -172,8 +172,8 @@ void m61_free(void *ptr, const char *file, int line) {
     
     				
     // First check if this is a valid free call.
-    if ((*metadata_ptr).data_valid==0xbeefbeef){
-	   
+    if ((*metadata_ptr).data_valid==ptr+(*metadata_ptr).distance_to_8multiple){
+	   //printf("the data is valid!");
 	   if(end_boundry_overwrite){
 		   printf("MEMORY BUG???: detected wild write during free of pointer ???\n");
 		   return;}
@@ -220,7 +220,7 @@ void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
         
 		
 		//Check if this was a valid pointer passed to realloc
-		if((*metadata_ptr).data_valid!=0xbeefbeef)
+		if((*metadata_ptr).data_valid!=ptr)
 		{
 		  printf("MEMORY BUG???: invalid realloc of pointer ???");
 		  return;
@@ -420,7 +420,7 @@ void print_recursive(struct m61_node* list_head){
 	
 	ptr_retrieved=ptr_retrieved+size_of_metadata; // move to the end of metadata beginning of data
 	
-	printf("LEAK CHECK: %s:%i: allocated object %p with size %i",(*metadata_ptr).file,(*metadata_ptr).line,ptr_retrieved,(*metadata_ptr).allocation_size);
+	printf("LEAK CHECK: %s:%i: allocated object %p with size %i\n",(*metadata_ptr).file,(*metadata_ptr).line,ptr_retrieved,(*metadata_ptr).allocation_size);
     //printf("\n List Entry Address: %i",list_head);
 	//printf("\n PTR: %p",(*list_head).ptr);
 	//printf("\n distance_to_8multiple: %i",(*list_head).distance_to_8multiple);
