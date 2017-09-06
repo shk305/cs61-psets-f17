@@ -135,9 +135,11 @@ void* m61_malloc(size_t sz, const char* file, int line) {
 ///    `file`:`line`.
 
 void m61_free(void *ptr, const char *file, int line) {
-	//list_traverse_recursive(list_head);
+	
     (void) file, (void) line;   // avoid uninitialized variable warnings
+	//list_traverse_recursive(list_head);
     //printf("ptr : %i\n",ptr);
+	//list_traverse_recursive(list_head);
     //printf("min : %i\n",heap_min);
     //printf("max : %i\n",heap_max);
     if (ptr==NULL){return;}
@@ -170,9 +172,20 @@ void m61_free(void *ptr, const char *file, int line) {
     //printf("distance to 8 : %i\n",(*metadata_ptr).distance_to_8multiple);
 	//printf("FREE: REPORTING DATA_VALIDITY : %x\n",(*metadata_ptr).data_valid);
     
-    				
-    // First check if this is a valid free call.
-    if ((*metadata_ptr).data_valid==ptr+(*metadata_ptr).distance_to_8multiple){
+	// Two step check for valid free call
+	
+	int check_failed=0;
+	// First match the metadata data_valid with the list entry data_valid.
+	if((*metadata_ptr).data_valid!=(*(*metadata_ptr).entry).data_valid)
+	   {check_failed=1;//printf("caught1");
+	   }
+	// Second match the ptr to the metadata data_valid 
+	if((*metadata_ptr).data_valid!=ptr+(*metadata_ptr).distance_to_8multiple)
+	   {check_failed=1;//printf("caught2");
+	   }
+	   
+    // Second check if the metadata belongs to this ptr
+    if (!check_failed){
 	   //printf("the data is valid!");
 	   if(end_boundry_overwrite){
 		   printf("MEMORY BUG???: detected wild write during free of pointer ???\n");
@@ -186,10 +199,10 @@ void m61_free(void *ptr, const char *file, int line) {
 	   base_free(ptr);
 	}
 	else{
-		if ((*metadata_ptr).data_valid==0xdeaddead){
+		if ((*metadata_ptr).data_valid==0xdeaddead){ //0xdeaddead means it was allocated and explicitly freed already
 		 printf("MEMORY BUG: invalid free of pointer \n");}
-		else{
-		 printf("MEMORY BUG: %s:%i: invalid free of pointer ???, not allocated\n",file, line);}
+		else{       // This means it was probably never allocated
+		 printf("MEMORY BUG: %s:%i: invalid free of pointer ???, not allocated\n",file, line);} 
 	}
 	//list_traverse_recursive(list_head);
     //printf("Freed : %i\n",(int)ptr);
@@ -322,7 +335,13 @@ void m61_printleakreport(void) {
 
 
 struct m61_node* create(struct m61_node* old_list_head, void* ptr,size_t distance_to_8m){
+	// To make sure list entries are far away from the data.
+	int* space_filler = (int*) base_malloc(20000);
+		
     struct m61_node* new_node =(struct m61_node*)base_malloc(sizeof(struct m61_node));
+	
+	base_free(space_filler);
+	
     if (new_node==NULL){
         printf("The new node could not be created\n");
         abort();
@@ -330,6 +349,7 @@ struct m61_node* create(struct m61_node* old_list_head, void* ptr,size_t distanc
      // save the payload (data) in this new node
      (*new_node).ptr=ptr;
 	 (*new_node).distance_to_8multiple=distance_to_8m;
+	 (*new_node).data_valid=ptr;
 	 // Old list head will be the next element after this is added.
      (*new_node).next=old_list_head;
 	 // Since I added on top the new node.previous =0
@@ -354,11 +374,12 @@ void list_traverse_recursive(struct m61_node* list_head){
 		printf(" \nThe list is empty\n");
 		return;		
 	}
-    printf("\n List Entry Address: %i",list_head);
+    printf("\n\n List Entry Address: %i",list_head);
 	printf("\n PTR: %i",(*list_head).ptr);
-	printf("\n distance_to_8multiple: %i",(*list_head).distance_to_8multiple);
-    printf("\n previous--> %i",(*list_head).previous);
-    printf("\n next--> %i \n",(*list_head).next);
+	//printf("\n distance_to_8multiple: %i",(*list_head).distance_to_8multiple);
+    printf("\n DATA VALID %i",(*list_head).data_valid); // its valid if it contains the ptr value
+    //printf("\n previous--> %i",(*list_head).previous);
+    //printf("\n next--> %i \n",(*list_head).next);
     
 	
     if((*list_head).next!=0){
@@ -372,11 +393,18 @@ void remove_from_list(struct m61_node* entry_to_remove){
     //(*(*entry_to_remove).next).previous=
 	//(*(*entry_to_remove).previous).next=(*entry_to_remove).next;
 	//list_traverse_recursive(list_head);
-    //printf("POINTER_TO_ENTRY TO BE REMOVED : %i\n",entry_to_remove);
+    //printf("\n\nPOINTER_TO_ENTRY TO BE REMOVED : %i",entry_to_remove);//entry_to_remove
+	//printf("DATA_VALID : %i\n",(*entry_to_remove).data_valid);
 	//printf("My Next: %i\n",(*entry_to_remove).next);
 	//printf("My Previous: %i\n",(*entry_to_remove).previous);
 	struct m61_node* my_next=(*entry_to_remove).next;
 	struct m61_node* my_previous=(*entry_to_remove).previous;
+	//list_traverse_recursive(list_head);
+	// Invalidate me as an entry
+	(*entry_to_remove).data_valid = 0;
+	//list_traverse_recursive(list_head);
+	
+	//printf("DATA_VALID rogjt af : %i\n",(*entry_to_remove).data_valid);
 
 	if (my_next!=0){ // if its not the last element.
 		 //printf("Next er previous: %i\n",(*my_next).previous);
@@ -404,6 +432,8 @@ void remove_from_list(struct m61_node* entry_to_remove){
 	
 
 void print_recursive(struct m61_node* list_head){
+	//list_traverse_recursive(list_head);
+	
 	if(list_head==0){
 		//printf(" \nThe list is empty\n");
 		return;		

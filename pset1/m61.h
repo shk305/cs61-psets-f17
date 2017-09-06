@@ -53,6 +53,7 @@ struct m61_metadata {
 typedef struct m61_node{
         void* ptr;
 		size_t distance_to_8multiple;
+		size_t data_valid;
         struct m61_node* previous;
         struct m61_node* next; 
     };
