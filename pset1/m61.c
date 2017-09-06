@@ -7,7 +7,7 @@
 #include <assert.h>
 
 
-struct m61_node* list_head=0;
+struct m61_node* list_head_global=0;
 struct m61_node* list_tail;
 
 int size_of_metadata = sizeof(struct m61_metadata); // 8 bytes of metadata
@@ -66,9 +66,9 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     size_t distance_to_8multiple =8-((uintptr_t) ptr % 8); // to figure out its distance from a multiple of 8
   
     // Add this ptr to the list that tracks all allocation.
-    list_head=list_prepend(list_head,ptr,distance_to_8multiple); // add data and update the list head to the new list head
-    metadata.entry=list_head; // this is the pointer for the entry in the list for this malloc
-	//list_traverse_recursive(list_head);
+    list_head_global=list_prepend(list_head_global,ptr,distance_to_8multiple); // add data and update the list head to the new list head
+    metadata.entry=list_head_global; // this is the pointer for the entry in the list for this malloc
+	//list_traverse_recursive(list_head_global);
 
  
     
@@ -79,7 +79,7 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     } // add the remaining distance to make it a multiple of 8
 
     // Make the data valid by writing 0xbeefbeef. Free will write 0xdeaddead
-	metadata.data_valid=ptr;//printf("DATA VALID returned: %x\n",metadata.data_valid);
+	metadata.data_valid=(int)ptr;//printf("DATA VALID returned: %x\n",metadata.data_valid);
 		
     // Storing the metadata at the location pointed to by ptr. 
     *(struct m61_metadata*) ptr = metadata;
@@ -137,15 +137,15 @@ void* m61_malloc(size_t sz, const char* file, int line) {
 void m61_free(void *ptr, const char *file, int line) {
 	
     (void) file, (void) line;   // avoid uninitialized variable warnings
-	//list_traverse_recursive(list_head);
+	//list_traverse_recursive(list_head_global);
     //printf("ptr : %i\n",ptr);
-	//list_traverse_recursive(list_head);
+	//list_traverse_recursive(list_head_global);
     //printf("min : %i\n",heap_min);
     //printf("max : %i\n",heap_max);
     if (ptr==NULL){return;}
     
     // Check to see if the address is in the heap. might need to implement a different way later
-    if (ptr<heap_min | ptr>heap_max| !(malloc_count)){
+    if (((unsigned int)ptr<(unsigned int)heap_min )| ((unsigned int)ptr>(unsigned int)heap_max)| !(malloc_count)){
         printf("MEMORY BUG???: invalid free of pointer ???, not in heap\n");
         abort();}
     // Your code here.
@@ -180,7 +180,7 @@ void m61_free(void *ptr, const char *file, int line) {
 	   {check_failed=1;//printf("caught1");
 	   }
 	// Second match the ptr to the metadata data_valid 
-	if((*metadata_ptr).data_valid!=ptr+(*metadata_ptr).distance_to_8multiple)
+	if((unsigned int)(*metadata_ptr).data_valid!=(unsigned int)(ptr+(*metadata_ptr).distance_to_8multiple))
 	   {check_failed=1;//printf("caught2");
 	   }
 	   
@@ -204,10 +204,10 @@ void m61_free(void *ptr, const char *file, int line) {
 		else{       // This means it was probably never allocated
 		  printf("MEMORY BUG: %s:%i: invalid free of pointer ???, not allocated\n",file, line); 
           void *original_ptr=ptr+size_of_metadata+(*metadata_ptr).distance_to_8multiple;
-		  pointer_check_recursive(list_head,original_ptr);
+		  pointer_check_recursive(list_head_global,original_ptr);
 		} 
 	}
-	//list_traverse_recursive(list_head);
+	//list_traverse_recursive(list_head_global);
     //printf("Freed : %i\n",(int)ptr);
 }
 
@@ -236,10 +236,10 @@ void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
         
 		
 		//Check if this was a valid pointer passed to realloc
-		if((*metadata_ptr).data_valid!=ptr)
+		if((unsigned int)(*metadata_ptr).data_valid!=(unsigned int)ptr)
 		{
 		  printf("MEMORY BUG???: invalid realloc of pointer ???");
-		  return;
+		  return NULL;
 		}
 		//printf("MEMORY BUG???: invalid realloc of pointer ???");
 		
@@ -326,11 +326,11 @@ void m61_printstatistics(void) {
 ///    memory.
 
 void m61_printleakreport(void) {
-  	if(list_head==0){
+  	if(list_head_global==0){
 		//printf("\nThe list is empty\n");
 		return;	
 	}	
-    print_recursive(list_head);
+    print_recursive(list_head_global);
 	
     return;
 }
@@ -357,7 +357,7 @@ struct m61_node* create(struct m61_node* old_list_head, void* ptr,size_t distanc
      // save the payload (data) in this new node
      (*new_node).ptr=ptr;
 	 (*new_node).distance_to_8multiple=distance_to_8m;
-	 (*new_node).data_valid=ptr;
+	 (*new_node).data_valid=(unsigned int)ptr;
 	 // Old list head will be the next element after this is added.
      (*new_node).next=old_list_head;
 	 // Since I added on top the new node.previous =0
@@ -382,8 +382,8 @@ void list_traverse_recursive(struct m61_node* list_head){
 		printf(" \nThe list is empty\n");
 		return;		
 	}
-    printf("\n\n List Entry Address: %i",list_head);
-	printf("\n PTR: %i",(*list_head).ptr);
+    printf("\n\n List Entry Address: %i",(unsigned int)list_head);
+	printf("\n PTR: %i",(unsigned int)(*list_head).ptr);
 	//printf("\n distance_to_8multiple: %i",(*list_head).distance_to_8multiple);
     printf("\n DATA VALID %i",(*list_head).data_valid); // its valid if it contains the ptr value
     //printf("\n previous--> %i",(*list_head).previous);
@@ -400,17 +400,17 @@ void list_traverse_recursive(struct m61_node* list_head){
 void remove_from_list(struct m61_node* entry_to_remove){
     //(*(*entry_to_remove).next).previous=
 	//(*(*entry_to_remove).previous).next=(*entry_to_remove).next;
-	//list_traverse_recursive(list_head);
+	//list_traverse_recursive(list_head_global);
     //printf("\n\nPOINTER_TO_ENTRY TO BE REMOVED : %i",entry_to_remove);//entry_to_remove
 	//printf("DATA_VALID : %i\n",(*entry_to_remove).data_valid);
 	//printf("My Next: %i\n",(*entry_to_remove).next);
 	//printf("My Previous: %i\n",(*entry_to_remove).previous);
 	struct m61_node* my_next=(*entry_to_remove).next;
 	struct m61_node* my_previous=(*entry_to_remove).previous;
-	//list_traverse_recursive(list_head);
+	//list_traverse_recursive(list_head_global);
 	// Invalidate me as an entry
 	(*entry_to_remove).data_valid = 0;
-	//list_traverse_recursive(list_head);
+	//list_traverse_recursive(list_head_global);
 	
 	//printf("DATA_VALID rogjt af : %i\n",(*entry_to_remove).data_valid);
 
@@ -425,13 +425,13 @@ void remove_from_list(struct m61_node* entry_to_remove){
 		}
 	 else {
            if(my_next==0)  // if My next is also 0. the list is empty after my removal
-              list_head = 0; // The list will become empty after this removal.
-           else list_head = my_next; // if my next is not 0 then my next becomes the new head.
+              list_head_global = 0; // The list will become empty after this removal.
+           else list_head_global = my_next; // if my next is not 0 then my next becomes the new head.
 		 }	
 		
 	//printf("Previous er next: %i\n",*((*entry_to_remove).previous).next);
 	
-	//list_traverse_recursive(list_head);
+	//list_traverse_recursive(list_head_global);
 	base_free(entry_to_remove);
     
     return;
