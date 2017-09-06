@@ -93,6 +93,9 @@ void list_traverse_recursive(struct m61_node* list_head);
 struct m61_node* create(struct m61_node* next, void* ptr,size_t distance_to_8m);
 void remove_from_list(struct m61_node* entry_to_remove);
 
+void pointer_check_recursive(struct m61_node* list_head, void* ptr);
+
+
 void print_recursive(struct m61_node* list_head);
 
 #endif

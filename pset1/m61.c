@@ -200,9 +200,12 @@ void m61_free(void *ptr, const char *file, int line) {
 	}
 	else{
 		if ((*metadata_ptr).data_valid==0xdeaddead){ //0xdeaddead means it was allocated and explicitly freed already
-		 printf("MEMORY BUG: invalid free of pointer \n");}
+		  printf("MEMORY BUG: invalid free of pointer \n");}
 		else{       // This means it was probably never allocated
-		 printf("MEMORY BUG: %s:%i: invalid free of pointer ???, not allocated\n",file, line);} 
+		  printf("MEMORY BUG: %s:%i: invalid free of pointer ???, not allocated\n",file, line); 
+          void *original_ptr=ptr+size_of_metadata+(*metadata_ptr).distance_to_8multiple;
+		  pointer_check_recursive(list_head,original_ptr);
+		} 
 	}
 	//list_traverse_recursive(list_head);
     //printf("Freed : %i\n",(int)ptr);
@@ -465,6 +468,37 @@ void print_recursive(struct m61_node* list_head){
 	
     if((*list_head).next!=0){
         print_recursive((*list_head).next);
+        }
+    return;
+    }
+	
+	
+	
+void pointer_check_recursive(struct m61_node* list_head, void* check_ptr){
+	if(list_head==0){
+		//printf(" \nThe list is empty\n");
+		return;		
+	}
+    //printf("\n\n List Entry Address: %i",list_head);
+	//printf("\n PTR to CHECK: %i",check_ptr);
+	
+	void* allocation_starting_ptr=(*list_head).ptr+size_of_metadata+(8%(*list_head).distance_to_8multiple);
+	//printf("\n THIS ALLOCATION STARTING POINT: %i",allocation_starting_ptr);
+	
+	struct m61_metadata* metadata=allocation_starting_ptr-size_of_metadata; // add any shifting that was done to allign to 8 multiple. to point to metadata
+	size_t allocation_size=(*metadata).allocation_size;
+	//printf("\n allocation_size: %i",allocation_size);
+
+	if((check_ptr>=allocation_starting_ptr) && (check_ptr<=allocation_starting_ptr+allocation_size)){
+	      printf("  %s:%i: %p is %i bytes inside a %i byte region allocated here\n",(*metadata).file,(*metadata).line,check_ptr,(check_ptr-allocation_starting_ptr),allocation_size);
+		}
+	//printf("\n PTR: %i",(*list_head).ptr);
+	//printf("\n distance_to_8multiple: %i",(*list_head).distance_to_8multiple);
+    //printf("\n DATA VALID %i",(*list_head).data_valid); // its valid if it contains the ptr value
+    //printf("\n previous--> %i",(*list_head).previous);
+    //printf("\n next--> %i \n",(*list_head).next);
+    if((*list_head).next!=0){
+        list_traverse_recursive((*list_head).next);
         }
     return;
     }
