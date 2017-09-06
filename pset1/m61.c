@@ -263,8 +263,13 @@ void* m61_realloc(void* ptr, size_t sz, const char* file, int line) {
 
 void* m61_calloc(size_t nmemb, size_t sz, const char* file, int line) {
     // Your code here (to fix test016).
-    //printf("nmemb: %i\n",nmemb);
-    //printf("sz: %i\n",sz);
+    //printf("address of nmemb: %u\n",(&nmemb));
+    //printf("content of nmemb: %u\n",*(&nmemb));
+	//printf("adress+: %p\n",((char*)&nmemb+4));
+    //printf("content nmemb: %p\n",(size_t)*((char*)&nmemb+4));			
+
+    //printf("sz: %p\n",sz);
+	//printf("sz: %i\n",sizeof(int));
     //nmemb=300;
     size_t total= nmemb* sz;
     
