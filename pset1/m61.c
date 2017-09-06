@@ -11,7 +11,7 @@ struct m61_node* list_head_global=0;
 struct m61_node* list_tail;
 
 int size_of_metadata = sizeof(struct m61_metadata); // 8 bytes of metadata
-int malloc_end_buffer=4*sizeof(int);      // 20 bytes to be added at the end for boundry write issues.
+int malloc_end_buffer=16*sizeof(char);      // 16 bytes to be added at the end for boundry write issues.
 
 int first_malloc_call=1;
 unsigned long long malloc_count = 0;          // # my malloc count
@@ -86,11 +86,11 @@ void* m61_malloc(size_t sz, const char* file, int line) {
 
 
     // Initialize the end part witha a known value
-	size_t* end_boundry_ptr=ptr+size_of_metadata+sz;
+	char* end_boundry_ptr=ptr+size_of_metadata+sz;
 	//printf("\nEnd_boundry_ptr : %i ",end_boundry_ptr);
-	for(int i=0; i < 4;i++){
+	for(int i=0; i < 16;i++){
 		 //printf(" int : %i",i);
-		 *(end_boundry_ptr+i) = 0xdeaddead;
+		 *(end_boundry_ptr+i) = 0xee;
 		}
 	
     // Heap Min
@@ -114,15 +114,16 @@ void* m61_malloc(size_t sz, const char* file, int line) {
     malloc_count++;
     total_size= total_size + sz;
     active_size=active_size+sz;
+	
 	/*
 	// DUMP ALLOCATION
 	size_t* beginning_of_allocation_ptr=ptr-size_of_metadata;
     printf("\nRecalculated beginning : %i \n",beginning_of_allocation_ptr);
-	for(int i=0; i<(size_to_allocate/4); i++)
-	{
-	 printf(" \nMEMORY LOCATION: %i CONTENT: %x ", beginning_of_allocation_ptr+(i),*(beginning_of_allocation_ptr+(i) ));	
+	for(int i=0; i<(size_to_allocate/4); i++){
+	 size_t* address_to_dump = beginning_of_allocation_ptr+i;
+	 printf(" \nMEMORY LOCATION: %u CONTENT: %x ", address_to_dump,*address_to_dump);	
 	}
-     */ 
+     */
 	  
     return ptr;
 }
@@ -138,7 +139,7 @@ void m61_free(void *ptr, const char *file, int line) {
 	
     (void) file, (void) line;   // avoid uninitialized variable warnings
 	//list_traverse_recursive(list_head_global);
-    //printf("ptr : %i\n",ptr);
+    //printf("ptr : %p\n",ptr);
 	//list_traverse_recursive(list_head_global);
     //printf("min : %i\n",heap_min);
     //printf("max : %i\n",heap_max);
@@ -156,15 +157,10 @@ void m61_free(void *ptr, const char *file, int line) {
     struct m61_metadata *metadata_ptr;
     metadata_ptr=ptr; // now metadata_ptr is pointing to the metadata for this allocation.
  
-	// Make sure there were no overwrites at the end boundry
-    size_t* end_boundry_ptr=ptr+size_of_metadata+(*metadata_ptr).allocation_size; 
-    //printf("\nEnd_boundry_ptr FREE: %i ",end_boundry_ptr);
-    int end_boundry_overwrite=0;
-	for(int i=0; i < 4;i++){
-		 if(*(end_boundry_ptr+i) != 0xdeaddead){
-			 end_boundry_overwrite=1;
-		 }
-	}
+    // old overrite check used to be here
+
+
+		
 
 
 	// If there were any allignment shift. undo the shift. ptr should now point to the original base_malloc returned pointer
@@ -175,21 +171,40 @@ void m61_free(void *ptr, const char *file, int line) {
 	// Two step check for valid free call
 	
 	int check_failed=0;
-	// First match the metadata data_valid with the list entry data_valid.
-	if((*metadata_ptr).data_valid!=(*(*metadata_ptr).entry).data_valid)
-	   {check_failed=1;//printf("caught1");
-	   }
-	// Second match the ptr to the metadata data_valid 
+	
+	struct m61_node *node_ptr=(*metadata_ptr).entry;
+	
+	  //First match the ptr to the metadata data_valid 
 	if((unsigned int)(*metadata_ptr).data_valid!=(unsigned int)(ptr+(*metadata_ptr).distance_to_8multiple))
 	   {check_failed=1;//printf("caught2");
 	   }
-	   
+	
+	if (!check_failed){
+	  // Second match the metadata data_valid with the list entry data_valid.
+	  if((*metadata_ptr).data_valid!=(*node_ptr).data_valid){
+		 check_failed=1;//printf("caught1");
+	    }
+	}
+	
     // Second check if the metadata belongs to this ptr
     if (!check_failed){
+
+		 // Make sure there were no overwrites at the end boundry
+		 char* end_boundry_ptr=ptr+size_of_metadata+(*metadata_ptr).allocation_size; 
+         //printf("\nEnd_boundry_ptr FREE: %u ",(unsigned int)end_boundry_ptr);
+         int end_boundry_overwrite=0;
+	     for(int i=0; i < 16;i++){
+		 // printf("boundry value read back:%p",(char)*(end_boundry_ptr+i)&0xff);
+		  if((*(end_boundry_ptr+i)&0xff) != 0xee){
+			 end_boundry_overwrite=1;
+	    	 }
+     	 }  
+		
 	   //printf("the data is valid!");
 	   if(end_boundry_overwrite){
 		   printf("MEMORY BUG???: detected wild write during free of pointer ???\n");
 		   return;}
+
          	
 	   // Remove the list entry for this allocation
 	   remove_from_list((*metadata_ptr).entry); 
